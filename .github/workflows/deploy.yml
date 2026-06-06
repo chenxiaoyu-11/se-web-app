@@ -1,0 +1,43 @@
+name: DevOps CI CD Aliyun ACR
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-test-push:
+    runs-on: ubuntu-latest
+    steps:
+      #1拉取源码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      #2自动化单元测试
+      - name: Unit Test
+        run: |
+          pip install -r requirements.txt
+          pytest test_app.py
+
+      #3获取commit短哈希做镜像标签
+      - name: Get SHA
+        id: getsha
+        run: echo "SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      #4登录阿里云私有镜像仓库
+      - name: Login Aliyun ACR
+        env:
+          REGISTRY: ${{ secrets.ALI_REGISTRY }}
+          USER: nick7719246840
+          PWD: ${{ secrets.ALI_ACR_PWD }}
+        run: docker login $REGISTRY -u $USER -p $PWD
+
+      #5构建镜像+双标签+推送阿里云
+      - name: Build Push Image
+        env:
+          REG: ${{ secrets.ALI_REGISTRY }}
+          NS: ${{ secrets.ALI_NAMESPACE }}
+          SHA: ${{ env.SHA }}
+        run: |
+          docker build -t ${REG}/${NS}/se-web-app:latest .
+          docker tag ${REG}/${NS}/se-web-app:latest ${REG}/${NS}/se-web-app:${SHA}
+          docker push ${REG}/${NS}/se-web-app:latest
+          docker push ${REG}/${NS}/se-web-app:${SHA}
